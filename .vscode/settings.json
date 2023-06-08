@@ -1,14 +1,16 @@
 {
   "cSpell.words": [
     "adiwajshing",
+    "functors",
     "middlewares",
+    "monoids",
     "pino",
     "qrcode",
     "RUAS",
     "snyk",
     "sweng",
-    "tslog",
-    "Sweng2"
+    "Sweng2",
+    "tslog"
   ],
   "presentation-mode.configBackup": {
     "editor.fontSize": "undefined",
