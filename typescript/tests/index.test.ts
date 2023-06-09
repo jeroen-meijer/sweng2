@@ -10,7 +10,6 @@ import {
   safeSqrt,
   sqrt,
 } from "../src/index";
-import { mainLogger } from "../src/logger";
 import { Err, Ok } from "../src/utilityTypes";
 
 describe("operations", () => {

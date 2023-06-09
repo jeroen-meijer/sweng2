@@ -2,6 +2,11 @@
   "name": "sweng2",
   "description": "Software Engineering 2 for RUAS.",
   "version": "1.1.0",
+  "main": "dist/src/index.js",
+  "repository": "https://github.com/jeroen-meijer/sweng2",
+  "author": "Jeroen Meijer",
+  "license": "MIT",
+  "private": true,
   "scripts": {
     "start:dev": "nodemon",
     "start:release": "node build.js && node dist/index.js",
@@ -27,7 +32,7 @@
     "tslog": "^4.8.2"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.1",
+    "@types/jest": "^29.5.2",
     "@types/node": "^18.15.2",
     "@typescript-eslint/eslint-plugin": "^5.55.0",
     "@typescript-eslint/parser": "^5.55.0",
@@ -45,4 +50,5 @@
       "path": "./node_modules/cz-conventional-changelog"
     }
   }
+
 }

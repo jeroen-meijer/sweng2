@@ -13,17 +13,5 @@
     "sweng",
     "Sweng2",
     "tslog"
-  ],
-  "presentation-mode.configBackup": {
-    "editor.fontSize": "undefined",
-    "editor.lineHeight": "undefined",
-    "editor.matchBrackets": "undefined",
-    "editor.minimap.enabled": "undefined",
-    "editor.scrollbar.verticalScrollbarSize": "undefined",
-    "window.zoomLevel": "undefined",
-    "workbench.activityBar.visible": "undefined",
-    "workbench.colorCustomizations": "undefined",
-    "workbench.colorTheme": "undefined",
-    "workbench.statusBar.visible": "undefined"
-  }
+  ]
 }

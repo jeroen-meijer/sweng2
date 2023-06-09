@@ -7,10 +7,10 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "Launch Program",
-      "skipFiles": ["<node_internals>/**"],
-      "program": "${workspaceFolder}/src/index.ts",
-      "preLaunchTask": "tsc: build - tsconfig.json",
+      "name": "Build and Debug",
+      "preLaunchTask": "Build",
+      "program": "${workspaceFolder}/typescript/dist/src/index.js",
+      "sourceMaps": true,
       "outFiles": ["${workspaceFolder}/dist/**/*.js"]
     }
   ]

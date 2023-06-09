@@ -72,7 +72,9 @@ export const sqrt: Fun<number, Result<number, string>> = ifThen(
   Fun(() => Err("Cannot take square root of negative number"))
 );
 export const abs = Fun((x: number) => Math.abs(x));
-export const safeSqrt = abs.then(sqrt).then(unwrapResult());
+export const safeSqrt = abs
+  .then<Result<number, string>>(sqrt)
+  .then<number>(unwrapResult<number, string>());
 
 export const logObject = <a>(msg?: string) =>
   Fun((x: a) => {
