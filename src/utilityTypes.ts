@@ -42,7 +42,7 @@ export const Some = <a>(value: a): Option<a> => ({
   kind: "some",
   value: value,
 });
-export const mapOption = <a, b>(f: Fun<a, b>) =>
+export const mapOption = <a, b>(f: Fun<a, b>): Fun<Option<a>, Option<b>> =>
   Fun((x: Option<a>) => (x.kind == "none" ? None() : Some(f(x.value))));
 
 export const unwrapOption = <a>() =>
