@@ -12,14 +12,21 @@ import {
   None,
 } from "./utilityTypes";
 
-export type Fun<a, b> = {
-  (_: a): b;
-  then: <c>(g: Fun<b, c>) => Fun<a, c>;
-} & (a extends b ? SymmetricallyTypedFun<a> : Unit);
+export type Fun<input, output> = {
+  (_: input): output;
+  then: <c>(g: Fun<output, c>) => Fun<input, c>;
+} & (input extends output ? SymmetricallyTypedFunFields<input> : Unit) &
+  (output extends StateData<input, infer valueType>
+    ? StatefulFunFields<input, valueType>
+    : Unit);
 
-export type SymmetricallyTypedFun<a> = {
+export type SymmetricallyTypedFunFields<a> = {
   repeat: (times: number) => Fun<a, a>;
   repeatUntil: (conditionFn: Fun<a, boolean>) => Fun<a, a>;
+};
+
+export type StatefulFunFields<s, a> = {
+  thenBind: <b>(f: Fun<a, StatefulFun<s, b>>) => StatefulFun<s, b>;
 };
 
 export const Fun = function <a, b>(f: (_: a) => b): Fun<a, b> {
@@ -28,18 +35,25 @@ export const Fun = function <a, b>(f: (_: a) => b): Fun<a, b> {
     return then(this, g);
   };
 
-  (fn as unknown as SymmetricallyTypedFun<Unit>).repeat = function (
+  (fn as unknown as SymmetricallyTypedFunFields<Unit>).repeat = function (
     this: Fun<Unit, Unit>,
     times: number
   ) {
     return repeat(this, times);
   };
 
-  (fn as unknown as SymmetricallyTypedFun<Unit>).repeatUntil = function (
+  (fn as unknown as SymmetricallyTypedFunFields<Unit>).repeatUntil = function (
     this: Fun<Unit, Unit>,
     conditionFn: Fun<Unit, boolean>
   ) {
     return repeatUntil(this, conditionFn);
+  };
+
+  (fn as unknown as any).thenBind = function <valueTypeA, valueTypeB>(
+    this: StatefulFun<a, valueTypeA>,
+    f: Fun<valueTypeA, StatefulFun<a, valueTypeB>>
+  ) {
+    return bindStatefulFun(f)(this);
   };
 
   return fn;
@@ -53,15 +67,17 @@ export const ifThen = <a, b>(
   elseFn: Fun<a, b>
 ): Fun<a, b> => Fun((x: a) => (conditionFn(x) ? thenFn : elseFn)(x));
 
-const then = <a, b, c>(f: Fun<a, b>, g: Fun<b, c>): Fun<a, c> =>
+export const then = <a, b, c>(f: Fun<a, b>, g: Fun<b, c>): Fun<a, c> =>
   Fun((x) => g(f(x)));
-const repeat = <a>(f: Fun<a, a>, times: number): Fun<a, a> =>
+export const repeat = <a>(f: Fun<a, a>, times: number): Fun<a, a> =>
   times <= 0 ? id() : f.then(repeat(f, times - 1));
-const repeatUntil = <a>(
+export const repeatUntil = <a>(
   f: Fun<a, a>,
   conditionFn: Fun<a, boolean>
 ): Fun<a, a> =>
-  Fun((x) => ifThen(conditionFn, id(), f.then(repeatUntil(f, conditionFn)))(x));
+  Fun((x) =>
+    ifThen<a, a>(conditionFn, id(), f.then(repeatUntil(f, conditionFn)))(x)
+  );
 
 export const incr = Fun((x: number) => x + 1);
 export const decr = Fun((x: number) => x - 1);
@@ -90,7 +106,7 @@ export const logObject = <a>(msg?: string) =>
 
 // --- Lecture 2 Exercise 1 ---
 
-type List<a> =
+export type List<a> =
   | {
       kind: "cons";
       head: a;
@@ -98,46 +114,46 @@ type List<a> =
     }
   | { kind: "empty" };
 
-const Cons = <a>(head: a, tail: List<a>): List<a> => ({
+export const Cons = <a>(head: a, tail: List<a>): List<a> => ({
   kind: "cons",
   head,
   tail,
 });
-const Empty = <a>(): List<a> => ({ kind: "empty" });
+export const Empty = <a>(): List<a> => ({ kind: "empty" });
 
-const _arrayToList = <a>(arr: a[]): List<a> =>
+export const _arrayToList = <a>(arr: a[]): List<a> =>
   arr.length === 0 ? Empty() : Cons(arr[0], _arrayToList<a>(arr.slice(1)));
 
-const mapList = <a, b>(f: Fun<a, b>): Fun<List<a>, List<b>> =>
+export const mapList = <a, b>(f: Fun<a, b>): Fun<List<a>, List<b>> =>
   Fun((l: List<a>) =>
     l.kind == "empty" ? Empty() : Cons(f(l.head), mapList(f)(l.tail))
   );
 
-const splitChars: Fun<string, List<string>> = Fun((s: string) =>
+export const splitChars: Fun<string, List<string>> = Fun((s: string) =>
   s.length === 0 ? Empty() : Cons(s.charAt(0), splitChars(s.slice(1)))
 );
 
-const joinStringSequence: Fun<List<string>, string> = Fun((l) =>
+export const joinStringSequence: Fun<List<string>, string> = Fun((l) =>
   l.kind === "empty" ? "" : l.head.concat(joinStringSequence(l.tail))
 );
 
-const splitMapJoinStrings = (f: Fun<List<string>, List<string>>) =>
+export const splitMapJoinStrings = (f: Fun<List<string>, List<string>>) =>
   splitChars.then(f).then(joinStringSequence);
 
-const encodeByOne: Fun<List<string>, List<string>> = mapList(
+export const encodeByOne: Fun<List<string>, List<string>> = mapList(
   Fun((s) => String.fromCharCode(s.charCodeAt(0) + 1))
 );
 
-const encode: Fun<number, Fun<List<string>, List<string>>> = Fun((n) =>
+export const encode: Fun<number, Fun<List<string>, List<string>>> = Fun((n) =>
   mapList<string, string>(Fun((s) => String.fromCharCode(s.charCodeAt(0) + n)))
 );
 
-type Collection<a> = _CollectionEmpty<a> | _CollectionCons<a>;
+export type Collection<a> = _CollectionEmpty<a> | _CollectionCons<a>;
 
-type _CollectionEmpty<a> = { kind: "empty" };
-type _CollectionCons<a> = { kind: "cons"; head: a; tail: Collection<a> };
+export type _CollectionEmpty<a> = { kind: "empty" };
+export type _CollectionCons<a> = { kind: "cons"; head: a; tail: Collection<a> };
 
-const collectionToString = <a, c extends Collection<a>>(
+export const collectionToString = <a, c extends Collection<a>>(
   toStr: Fun<c, string>
 ): Fun<c, string> =>
   Fun((l: c) =>
@@ -148,10 +164,11 @@ const collectionToString = <a, c extends Collection<a>>(
       : `${toStr(l)} => ${collectionToString(toStr)(l.tail as c)}`
   );
 
-const primitiveToString: <a>() => Fun<_CollectionCons<a>, string> = <a>() =>
-  Fun((x) => `${x.head}`);
+export const primitiveToString: <a>() => Fun<_CollectionCons<a>, string> = <
+  a
+>() => Fun((x) => `${x.head}`);
 
-const unwrapHead: <a>() => Fun<_CollectionCons<a>, a> = <a>() =>
+export const unwrapHead: <a>() => Fun<_CollectionCons<a>, a> = <a>() =>
   Fun((l) => l.head);
 
 // --- Lecture 2 Exercise 2 ---
@@ -160,25 +177,25 @@ const unwrapHead: <a>() => Fun<_CollectionCons<a>, a> = <a>() =>
 
 // --- Lecture 2 Exercise 3 ---
 
-type Tile<a> = {
+export type Tile<a> = {
   value: a;
   kind: "terrain" | "town" | "army";
 };
 
-const Terrain = <a>(value: a): Tile<a> => ({
+export const Terrain = <a>(value: a): Tile<a> => ({
   value,
   kind: "terrain",
 });
-const Town = <a>(value: a): Tile<a> => ({
+export const Town = <a>(value: a): Tile<a> => ({
   value,
   kind: "town",
 });
-const Army = <a>(value: a): Tile<a> => ({
+export const Army = <a>(value: a): Tile<a> => ({
   value,
   kind: "army",
 });
 
-const tileToString: <a>() => Fun<Tile<a>, string> = <a>() =>
+export const tileToString: <a>() => Fun<Tile<a>, string> = <a>() =>
   Fun((t: Tile<a>) => {
     switch (t.kind) {
       case "terrain":
@@ -190,7 +207,7 @@ const tileToString: <a>() => Fun<Tile<a>, string> = <a>() =>
     }
   });
 
-const tileConvertToTown = <a>() =>
+export const tileConvertToTown = <a>() =>
   Fun<Tile<a>, Tile<a>>((t) =>
     t.kind !== "terrain"
       ? {
@@ -202,20 +219,20 @@ const tileConvertToTown = <a>() =>
         }
   );
 
-const tileDestroy = <a>() =>
+export const tileDestroy = <a>() =>
   Fun<Tile<a>, Tile<a>>((t) => ({ ...t, kind: "terrain" }));
 
-const tileMoveArmy = <a>() =>
+export const tileMoveArmy = <a>() =>
   Fun<Tile<a>, Tile<a>>((t) =>
     t.kind !== "terrain" ? { ...t } : { ...t, kind: "army" }
   );
 
-const mapTileList: <a>(
+export const mapTileList: <a>(
   f: Fun<Tile<a>, Tile<a>>
 ) => Fun<List<Tile<a>>, List<Tile<a>>> = <a>(f: Fun<Tile<a>, Tile<a>>) =>
   mapList(f);
 
-const tileListToString = <a>() =>
+export const tileListToString = <a>() =>
   collectionToString(unwrapHead<Tile<a>>().then(tileToString<a>()));
 
 // mainLogger.info(
@@ -252,14 +269,14 @@ const tileListToString = <a>() =>
 
 // --- Lecture 2 Exercise 4 ---
 
-type Pair<a, b> = {
+export type Pair<a, b> = {
   left: a;
   right: b;
 };
 
-const Pair = <a, b>(left: a, right: b): Pair<a, b> => ({ left, right });
+export const Pair = <a, b>(left: a, right: b): Pair<a, b> => ({ left, right });
 
-const mapPairLeft = <a1, a2, b>(
+export const mapPairLeft = <a1, a2, b>(
   f: Fun<a1, a2>
 ): Fun<Pair<a1, b>, Pair<a2, b>> =>
   Fun((p) => ({
@@ -267,7 +284,7 @@ const mapPairLeft = <a1, a2, b>(
     left: f(p.left),
   }));
 
-const mapPairRight = <a, b1, b2>(
+export const mapPairRight = <a, b1, b2>(
   f: Fun<b1, b2>
 ): Fun<Pair<a, b1>, Pair<a, b2>> =>
   Fun((p) => ({
@@ -275,13 +292,13 @@ const mapPairRight = <a, b1, b2>(
     right: f(p.right),
   }));
 
-const mapPair = <a1, a2, b1, b2>(
+export const mapPair = <a1, a2, b1, b2>(
   f: Fun<a1, a2>,
   g: Fun<b1, b2>
 ): Fun<Pair<a1, b1>, Pair<a2, b2>> =>
   mapPairLeft<a1, a2, b1>(f).then(mapPairRight<a2, b1, b2>(g));
 
-const mapPairSuperior = <a1, a2, b1, b2>(
+export const mapPairSuperior = <a1, a2, b1, b2>(
   f: Pair<Fun<a1, a2>, Fun<b1, b2>>
 ): Fun<Pair<a1, b1>, Pair<a2, b2>> =>
   mapPairLeft<a1, a2, b1>(f.left).then(mapPairRight<a2, b1, b2>(f.right));
@@ -306,13 +323,13 @@ const mapPairSuperior = <a1, a2, b1, b2>(
 
 // --- Lecture 3 Exercise 1 ---
 
-const zeroStr = Fun((_: Unit) => "");
-const plusStr = Fun((s: Pair<string, string>) => s.left + s.right);
+export const zeroStr = Fun((_: Unit) => "");
+export const plusStr = Fun((s: Pair<string, string>) => s.left + s.right);
 
 // --- Lecture 3 Exercise 2 ---
 
-const zeroList = <a>() => Fun((_: Unit) => Empty<a>());
-const plusList = <a>(): Fun<Pair<List<a>, List<a>>, List<a>> =>
+export const zeroList = <a>() => Fun((_: Unit) => Empty<a>());
+export const plusList = <a>(): Fun<Pair<List<a>, List<a>>, List<a>> =>
   Fun((l: Pair<List<a>, List<a>>) => {
     if (l.left.kind === "empty") {
       return { ...l.right };
@@ -331,18 +348,18 @@ const plusList = <a>(): Fun<Pair<List<a>, List<a>>, List<a>> =>
 
 // --- Lecture 3 Exercise 3 ---
 
-type Identity<a> = a;
+export type Identity<a> = a;
 
-const idMonoid = <a>(): Fun<a, Identity<a>> => Fun((x: a) => x);
-const joinMonoid = <a>(): Fun<Identity<Identity<a>>, Identity<a>> =>
+export const idMonoid = <a>(): Fun<a, Identity<a>> => Fun((x: a) => x);
+export const joinMonoid = <a>(): Fun<Identity<Identity<a>>, Identity<a>> =>
   // Fun((x) => x)
   //   OR
   idMonoid<a>();
 
 // --- Lecture 3 Exercise 4 ---
 
-const unitOption = <a>(): Fun<a, Option<a>> => Fun((x) => Some(x));
-const joinOption = <a>(): Fun<Option<Option<a>>, Option<a>> =>
+export const unitOption = <a>(): Fun<a, Option<a>> => Fun((x) => Some(x));
+export const joinOption = <a>(): Fun<Option<Option<a>>, Option<a>> =>
   Fun((x) =>
     x.kind === "none" || x.value.kind === "none"
       ? None<a>()
@@ -356,8 +373,8 @@ const joinOption = <a>(): Fun<Option<Option<a>>, Option<a>> =>
 
 // --- Lecture 3 Exercise 5 ---
 
-const unitList = <a>(): Fun<a, List<a>> => Fun((x) => Cons(x, Empty()));
-const joinList = <a>(): Fun<List<List<a>>, List<a>> =>
+export const unitList = <a>(): Fun<a, List<a>> => Fun((x) => Cons(x, Empty()));
+export const joinList = <a>(): Fun<List<List<a>>, List<a>> =>
   Fun((l) =>
     l.kind === "empty"
       ? Empty<a>()
@@ -376,8 +393,9 @@ const joinList = <a>(): Fun<List<List<a>>, List<a>> =>
 
 // --- Lecture 4 Notes ---
 
-const bindOption = <a, b>(f: Fun<a, Option<b>>): Fun<Option<a>, Option<b>> =>
-  mapOption(f).then(joinOption());
+export const bindOption = <a, b>(
+  f: Fun<a, Option<b>>
+): Fun<Option<a>, Option<b>> => mapOption(f).then(joinOption());
 // Q: Why is the above any different from `mapOption`? Is the fact that `f` goes from an `a` to `Option<b>` significant?
 // Copilot Answer: Yes, because `f` is a function that returns an `Option<b>`, we need to use `joinOption` to flatten the nested `Option<Option<b>>` to `Option<b>`.
 //    `bind` is useful when we have a function that returns a monadic value, and we want to apply it to a monadic value.
@@ -412,7 +430,7 @@ const bindOption = <a, b>(f: Fun<a, Option<b>>): Fun<Option<a>, Option<b>> =>
 
 // --- Lecture 4 Exercise 1 ---
 
-const bindList = <a, b>(k: Fun<a, List<b>>): Fun<List<a>, List<b>> =>
+export const bindList = <a, b>(k: Fun<a, List<b>>): Fun<List<a>, List<b>> =>
   mapList(k).then(joinList());
 
 // const bindListTester = <a, b>(
@@ -431,7 +449,7 @@ const bindList = <a, b>(k: Fun<a, List<b>>): Fun<List<a>, List<b>> =>
 
 // --- Lecture 4 Exercise 2 ---
 
-type Set<a> =
+export type Set<a> =
   | {
       kind: "empty";
     }
@@ -441,7 +459,7 @@ type Set<a> =
       tail: Set<a>;
     };
 
-const Set = {
+export const Set = {
   empty: <a>(): Set<a> => ({ kind: "empty" }),
   cons: <a>(head: a, tail: Set<a>): Set<a> => ({
     kind: "cons",
@@ -450,7 +468,10 @@ const Set = {
   }),
 };
 
-const setPurgeDuplicates = <a>(s: Set<a>, visitedElements: a[]): Set<a> => {
+export const setPurgeDuplicates = <a>(
+  s: Set<a>,
+  visitedElements: a[]
+): Set<a> => {
   if (s.kind === "empty") {
     return Set.empty();
   } else {
@@ -468,15 +489,15 @@ const setPurgeDuplicates = <a>(s: Set<a>, visitedElements: a[]): Set<a> => {
   }
 };
 
-const _arrayToSet = <a>(arr: a[]): Set<a> =>
+export const _arrayToSet = <a>(arr: a[]): Set<a> =>
   arr.length === 0 ? Set.empty() : Set.cons(arr[0], _arrayToSet(arr.slice(1)));
 
-const mapSet = <a, b>(f: Fun<a, b>): Fun<Set<a>, Set<b>> =>
+export const mapSet = <a, b>(f: Fun<a, b>): Fun<Set<a>, Set<b>> =>
   Fun((s) =>
     s.kind === "empty" ? Set.empty() : Set.cons(f(s.head), mapSet(f)(s.tail))
   );
 
-const plusSet = <a>(): Fun<Pair<Set<a>, Set<a>>, Set<a>> =>
+export const plusSet = <a>(): Fun<Pair<Set<a>, Set<a>>, Set<a>> =>
   Fun((p) => {
     if (p.left.kind === "empty") {
       return p.right;
@@ -487,8 +508,9 @@ const plusSet = <a>(): Fun<Pair<Set<a>, Set<a>>, Set<a>> =>
     }
   });
 
-const unitSet = <a>(): Fun<a, Set<a>> => Fun((x) => Set.cons(x, Set.empty()));
-const joinSet = <a>(): Fun<Set<Set<a>>, Set<a>> =>
+export const unitSet = <a>(): Fun<a, Set<a>> =>
+  Fun((x) => Set.cons(x, Set.empty()));
+export const joinSet = <a>(): Fun<Set<Set<a>>, Set<a>> =>
   Fun((ns) => {
     if (ns.kind === "empty") {
       return Set.empty();
@@ -497,7 +519,7 @@ const joinSet = <a>(): Fun<Set<Set<a>>, Set<a>> =>
     return plusSet<a>()(Pair(ns.head, joinSet<a>()(ns.tail)));
   });
 
-const bindSet = <a, b>(k: Fun<a, Set<b>>): Fun<Set<a>, Set<b>> =>
+export const bindSet = <a, b>(k: Fun<a, Set<b>>): Fun<Set<a>, Set<b>> =>
   mapSet(k).then(joinSet());
 
 // mainLogger.info(
@@ -508,20 +530,20 @@ const bindSet = <a, b>(k: Fun<a, Set<b>>): Fun<Set<a>, Set<b>> =>
 
 // --- Lecture 4 Exercise 3 ---
 
-type Dll<a> = _DllEmpty<a> | _DllCons<a>;
+export type Dll<a> = _DllEmpty<a> | _DllCons<a>;
 
-type _DllEmpty<a> = {
+export type _DllEmpty<a> = {
   kind: "empty";
 };
 
-type _DllCons<a> = {
+export type _DllCons<a> = {
   kind: "cons";
   head: a;
   prev: Dll<a>;
   tail: Dll<a>;
 };
 
-const Dll = {
+export const Dll = {
   empty: <a>(): _DllEmpty<a> => ({ kind: "empty" }),
   cons: <a>(head: a, prev: Dll<a>, tail: Dll<a>): _DllCons<a> => ({
     kind: "cons",
@@ -531,7 +553,7 @@ const Dll = {
   }),
 };
 
-const _arrayToDll = <a>(arr: a[]): Dll<a> => {
+export const _arrayToDll = <a>(arr: a[]): Dll<a> => {
   if (arr.length === 0) {
     return Dll.empty();
   }
@@ -547,7 +569,7 @@ const _arrayToDll = <a>(arr: a[]): Dll<a> => {
 
 // mainLogger.info(_arrayToDll([1, 2, 3]));
 
-const plusDll = <a>(): Fun<Pair<Dll<a>, Dll<a>>, Dll<a>> =>
+export const plusDll = <a>(): Fun<Pair<Dll<a>, Dll<a>>, Dll<a>> =>
   Fun((p) => {
     if (p.left.kind === "empty") {
       return p.right;
@@ -567,7 +589,7 @@ const plusDll = <a>(): Fun<Pair<Dll<a>, Dll<a>>, Dll<a>> =>
     }
   });
 
-const dllSeekStart = <a>() =>
+export const dllSeekStart = <a>() =>
   Fun((dll: Dll<a>): Dll<a> => {
     if (dll.kind === "empty") {
       return Dll.empty();
@@ -581,9 +603,9 @@ const dllSeekStart = <a>() =>
     return current;
   });
 
-const unitDll = <a>(): Fun<a, Dll<a>> =>
+export const unitDll = <a>(): Fun<a, Dll<a>> =>
   Fun((x) => Dll.cons(x, Dll.empty(), Dll.empty()) as Dll<a>);
-const joinDll = <a>(): Fun<Dll<Dll<a>>, Dll<a>> =>
+export const joinDll = <a>(): Fun<Dll<Dll<a>>, Dll<a>> =>
   Fun((nd) => {
     if (nd.kind === "empty") {
       return Dll.empty() as Dll<a>;
@@ -606,7 +628,7 @@ const joinDll = <a>(): Fun<Dll<Dll<a>>, Dll<a>> =>
     return innerJoin(start);
   });
 
-const verifyDll = <a>(
+export const verifyDll = <a>(
   d: Dll<a>
 ): { isValid: true } | { isValid: false; msg: string; instance: Dll<a> } => {
   if (d.kind === "empty") {
@@ -645,7 +667,7 @@ const verifyDll = <a>(
   return { isValid: true };
 };
 
-const dllNodeToStringWithDirectNeighbors: Fun<Dll<any>, string> = Fun(
+export const dllNodeToStringWithDirectNeighbors: Fun<Dll<any>, string> = Fun(
   (dll: Dll<any>): string => {
     if (dll.kind === "empty") {
       return "EMPTY";
@@ -667,7 +689,7 @@ const dllNodeToStringWithDirectNeighbors: Fun<Dll<any>, string> = Fun(
   }
 );
 
-const mapDll = <a, b>(f: Fun<a, b>): Fun<Dll<a>, Dll<b>> =>
+export const mapDll = <a, b>(f: Fun<a, b>): Fun<Dll<a>, Dll<b>> =>
   Fun((x) => {
     if (x.kind === "empty") {
       return Dll.empty();
@@ -689,10 +711,10 @@ const mapDll = <a, b>(f: Fun<a, b>): Fun<Dll<a>, Dll<b>> =>
     return innerMap(start);
   });
 
-const bindDll = <a, b>(k: Fun<a, Dll<b>>): Fun<Dll<a>, Dll<b>> =>
+export const bindDll = <a, b>(k: Fun<a, Dll<b>>): Fun<Dll<a>, Dll<b>> =>
   mapDll(k).then(joinDll());
 
-const _dllToString = (dll: Dll<any>, simple: boolean = false) => {
+export const _dllToString = (dll: Dll<any>, simple: boolean = false) => {
   return collectionToString<any, Dll<any>>(
     simple
       ? Fun((x) => `${x.kind === "empty" ? "EMPTY" : x.head}`)
@@ -757,12 +779,12 @@ const _dllToString = (dll: Dll<any>, simple: boolean = false) => {
 //   });
 // })();
 
-// --- Lecture 4 Notes ---
+// --- Lecture 5 Notes ---
 
-const none = <a>(): Fun<Unit, Option<a>> => Fun((_) => None());
-const some = <a>(): Fun<a, Option<a>> => Fun((x) => Some(x));
+export const none = <a>(): Fun<Unit, Option<a>> => Fun((_) => None());
+export const some = <a>(): Fun<a, Option<a>> => Fun((x) => Some(x));
 
-const mapOptionNew = <a, b>(f: Fun<a, b>): Fun<Option<a>, Option<b>> =>
+export const mapOptionNew = <a, b>(f: Fun<a, b>): Fun<Option<a>, Option<b>> =>
   Fun((x: Option<a>) =>
     x.kind === "none" ? none<b>()({}) : f.then(some<b>())(x.value)
   );
@@ -791,7 +813,7 @@ let map_Option_FROM_MATERIAL = <a, b>(
 //
 //    Can you verify this?
 
-// --- Lecture 4 Exercise 1 ---
+// --- Lecture 5 Exercise 1 ---
 
 interface ServerConnection {
   /**
@@ -807,7 +829,7 @@ interface ServerConnection {
 /**
  * A list of fake servers.
  */
-const servers: ServerConnection[] = [
+export const servers: ServerConnection[] = [
   { ip: "25.132.58.167", hello: "hello" },
   { ip: "81.106.142.123", hello: "what's poppin'?" },
   { ip: "214.98.39.99", hello: "hey" },
@@ -825,7 +847,7 @@ interface ServerContent {
   content: string;
 }
 
-type ConnectionResult =
+export type ConnectionResult =
   | {
       status: "success";
     }
@@ -834,7 +856,7 @@ type ConnectionResult =
       reason: string;
     };
 
-const _checkCanConnect = (ip: string): ConnectionResult =>
+export const _checkCanConnect = (ip: string): ConnectionResult =>
   servers.find((s) => s.ip === ip) === undefined
     ? {
         status: "failure",
@@ -844,10 +866,10 @@ const _checkCanConnect = (ip: string): ConnectionResult =>
     ? { status: "failure", reason: "connection failure" }
     : { status: "success" };
 
-const _checkCanRequest = (ip: string): boolean =>
+export const _checkCanRequest = (ip: string): boolean =>
   !ip.endsWith("9") && !ip.endsWith("7");
 
-const connect = Fun((ip: string): Option<ServerConnection> => {
+export const connect = Fun((ip: string): Option<ServerConnection> => {
   const serverIndex = servers.findIndex((s) => s.ip === ip);
   if (serverIndex === -1 || _checkCanConnect(ip).status == "failure") {
     return none<ServerConnection>()({});
@@ -856,7 +878,7 @@ const connect = Fun((ip: string): Option<ServerConnection> => {
   return some<ServerConnection>()(servers[serverIndex]);
 });
 
-const get = Fun((s: ServerConnection) =>
+export const get = Fun((s: ServerConnection) =>
   !_checkCanRequest(s.ip)
     ? none<ServerContent>()({})
     : some<ServerContent>()({
@@ -865,26 +887,26 @@ const get = Fun((s: ServerConnection) =>
       })
 );
 
-const fetch = connect.then(bindOption(get));
+export const fetch = connect.then(bindOption(get));
 
 // Q: `bind` can be thought of as "`map` as long as everything went the way you thought it would"?
 //    For example, binding an Option means "`map` if it's a Some". `bindLeft` is "`map` is this Either is a left".
 
 // --- Lecture 4 Exercise 2 ---
 
-type Either<a, b> =
+export type Either<a, b> =
   | {
       kind: "left";
       value: a;
     }
   | { kind: "right"; value: b };
 
-const inl = <a, b>() =>
+export const inl = <a, b>() =>
   Fun((value: a): Either<a, b> => ({ kind: "left", value }));
-const inr = <a, b>() =>
+export const inr = <a, b>() =>
   Fun((value: b): Either<a, b> => ({ kind: "right", value }));
 
-const mapEither = <a1, b1, a2, b2>(
+export const mapEither = <a1, b1, a2, b2>(
   f: Fun<a1, a2>,
   g: Fun<b1, b2>
 ): Fun<Either<a1, b1>, Either<a2, b2>> =>
@@ -898,27 +920,34 @@ const mapEither = <a1, b1, a2, b2>(
         g.then(inr<a2, b2>())(e.value)
   );
 
-const unitEither = <a, b>(): Fun<a, Either<a, b>> => inl<a, b>();
-const joinEither = <a, b>(): Fun<Either<a, Either<a, b>>, Either<a, b>> =>
-  Fun((e) => (e.kind === "left" ? inl<a, b>()(e.value) : e.value));
+export const unitEither = <a, b>(): Fun<a, Either<a, b>> => inl<a, b>();
+export const joinEither = <a, b>(): Fun<
+  Either<a, Either<a, b>>,
+  Either<a, b>
+> => Fun((e) => (e.kind === "left" ? inl<a, b>()(e.value) : e.value));
 
-const bindEither = <a1, b1, a2, b2>(f: Fun<a1, Either<a2, b2>>) =>
-  mapEither(f, id()).then(joinEither());
+export const bindEither = <a, b1, b2>(
+  f: Fun<b1, Either<a, b2>>
+): Fun<Either<a, b1>, Either<a, b2>> =>
+  mapEither(id<a>(), f).then(joinEither());
 
-type Exception<a> = Either<string, a>;
+export type Exception<a> = Either<string, a>;
 
-const mapException = <a, b>(f: Fun<a, b>): Fun<Exception<a>, Exception<b>> =>
-  mapEither(id(), f);
+export const mapException = <a, b>(
+  f: Fun<a, b>
+): Fun<Exception<a>, Exception<b>> => mapEither(id(), f);
 
-const unitException = <a>(): Fun<a, Exception<a>> => inr();
-const createException = <a>(): Fun<string, Exception<a>> => inl();
+export const unitException = <a>(): Fun<a, Exception<a>> => inr();
+export const createException = <a>(): Fun<string, Exception<a>> => inl();
 
-const joinException = <a>(): Fun<Exception<Exception<a>>, Exception<a>> =>
-  joinEither<string, a>();
+export const joinException = <a>(): Fun<
+  Exception<Exception<a>>,
+  Exception<a>
+> => joinEither<string, a>();
 
-const bindException = <a, b>(f: Fun<a, Exception<b>>) => bindEither(f);
+export const bindException = <a, b>(f: Fun<a, Exception<b>>) => bindEither(f);
 
-const _checkCanConnectNew = Fun((ip: string): Exception<string> => {
+export const _checkCanConnectNew = Fun((ip: string): Exception<string> => {
   const server = servers.find((s) => s.ip === ip);
   if (server === undefined) {
     return createException<string>()("invalid ip");
@@ -929,7 +958,7 @@ const _checkCanConnectNew = Fun((ip: string): Exception<string> => {
   }
 });
 
-const _checkCanRequestNew = Fun((ip: string): Exception<string> => {
+export const _checkCanRequestNew = Fun((ip: string): Exception<string> => {
   if (ip.startsWith("2")) {
     return createException<string>()("network error");
   } else {
@@ -942,51 +971,51 @@ const _checkCanRequestNew = Fun((ip: string): Exception<string> => {
 // --- Lecture 5 Notes ---
 
 /**
- * The data used by state monads (instead of `Pair<a, s>`)
+ * The data used by state monads (instead of `Pair<s, a>`)
  */
-type StateData<a, s> = {
-  value: a;
+export type StateData<s, a> = {
   state: s;
+  value: a;
 };
 
-const StateData = <a, s>(value: a, state: s): StateData<a, s> => ({
-  value,
+export const StateData = <s, a>(state: s, value: a): StateData<s, a> => ({
   state,
+  value,
 });
 
-const unitStateData = <a, s>(): Fun<s, Fun<a, StateData<a, s>>> =>
-  Fun((state: s) => Fun((value: a) => ({ value, state } as StateData<a, s>)));
+export const unitStateData = <s, a>(): Fun<s, Fun<a, StateData<s, a>>> =>
+  Fun((state: s) => Fun((value: a) => ({ value, state } as StateData<s, a>)));
 
 /*
 // An example function that, when called with a value of type `a`, returns
 // a state data containing that value and the state of type `StudentDb`.
-type StudentDb = {
+export type StudentDb = {
   [id: string]: {
     name: string;
     age: number;
   };
 }
 
-const _unitStudentDb = <a>() => unitStateData<a, StudentDb>()({});
+export const _unitStudentDb = <a>() => unitStateData<StudentDb, a>()({});
 
 // Example usage:
-const _exampleStudentDb = _unitStudentDb<string>()("hello");
+export const _exampleStudentDb = _unitStudentDb<string>()("hello");
 console.log(_exampleStudentDb.state); // {}
 console.log(_exampleStudentDb.value); // "hello"
 */
 
 // Functionally equivalent to mapPair.
-const mapStateData = <a, b, s>(
-  f: Fun<a, b>,
-  g: Fun<s, s>
-): Fun<StateData<a, s>, StateData<b, s>> =>
-  Fun((sd) => StateData(f(sd.value), g(sd.state)));
+export const mapStateData = <a, b, s>(
+  f: Fun<s, s>,
+  g: Fun<a, b>
+): Fun<StateData<s, a>, StateData<s, b>> =>
+  Fun((sd) => StateData(f(sd.state), g(sd.value)));
 
 // Functionally equivalent to joinPair.
-const joinStateData = <a, s>(): Fun<
-  StateData<StateData<a, s>, s>,
-  StateData<a, s>
-> => Fun((sd) => StateData(sd.value.value, sd.state));
+export const joinStateData = <s, a>(): Fun<
+  StateData<s, StateData<s, a>>,
+  StateData<s, a>
+> => Fun((sd) => StateData(sd.state, sd.value.value));
 
 /**
  * Encapsulates a computation that returns a result of an arbitrary type.
@@ -995,7 +1024,7 @@ const joinStateData = <a, s>(): Fun<
  * In:  unit (nothing)
  * Out: A value of type `a`.
  */
-type Producer<a> = Fun<Unit, a>;
+export type Producer<a> = Fun<Unit, a>;
 
 /**
  * A function that reads a state `s` and returns a value `a`.
@@ -1003,7 +1032,7 @@ type Producer<a> = Fun<Unit, a>;
  * In:  A state of type `s`.
  * Out: A value of type `a`.
  */
-type Reader<s, a> = Fun<s, a>;
+export type Reader<s, a> = Fun<s, a>;
 
 /**
  * The state monad.
@@ -1014,75 +1043,91 @@ type Reader<s, a> = Fun<s, a>;
  * In:  A state of type `s`.
  * Out: A tuple of a value of type `a` and a new state of type `s`.
  */
-type StateOperation<s, a> = Fun<s, StateData<a, s>>;
-const StateOperation = Fun;
+export type StatefulFun<s, a> = Fun<s, StateData<s, a>>;
 
-// Since `StateOperation` is a monad, we need the `map`, `unit`, and `join` operations.
+export const StatefulFun = <s, a>(
+  f: (_: s) => StateData<s, a>
+): StatefulFun<s, a> => {
+  const fun = Fun(f) as StatefulFun<s, a>;
+  // fun.thenBind = function <b>(
+  //   this: StatefulFun<s, a>,
+  //   f: Fun<a, StatefulFun<s, b>>
+  // ) {
+  //   return bindStatefulFun(f)(this);
+  // };
+
+  return fun;
+};
+
+export const bindStatefulFun = <s, a, b>(f: Fun<a, StatefulFun<s, b>>) =>
+  mapStatefulFun<s, a, StatefulFun<s, b>>(f).then(joinStatefulFun<s, b>());
+
+// Since `StatefulFun` is a monad, we need the `map`, `unit`, and `join` operations.
 
 /**
- * Maps a function `f` over a `StateOperation<s, a>`.
+ * Maps a function `f` over a `StatefulFun<s, a>`.
  *
- * `StateOperation<s, a>` is a function itself that takes a state `s` and returns
- * a tuple of a value `a` and a new state `s`. In other words, `StateOperation` functions
+ * `StatefulFun<s, a>` is a function itself that takes a state `s` and returns
+ * a tuple of a value `a` and a new state `s`. In other words, `StatefulFun` functions
  * are functions that take a state and return a new state with a value that resulted
  * from the computation.
  *
  * The steps for `mapState` are therefore:
- * 1. Run the state `StateOperation<s, a>` to get a tuple of a value `a` and a new state `s`.
+ * 1. Run the state `StatefulFun<s, a>` to get a tuple of a value `a` and a new state `s`.
  * 2. Run the function `f` on the value `a` to get a new value `b`.
- * 3. Return a new state `StateOperation<s, b>` that returns the new value `b` and the new state `s`.
+ * 3. Return a new state `StatefulFun<s, b>` that returns the new value `b` and the new state `s`.
  *
  * The first step simply becomes `s.then(...)`.
- * After that, we get a `StateData<a, s>`, so we can use `mapStateData` to run `f` on the value `a`.
- * Finally, we return a new state `StateOperation<s, b>` that returns the new value `b` and the new state `s`.
+ * After that, we get a `StateData<s, a>`, so we can use `mapStateData` to run `f` on the value `a`.
+ * Finally, we return a new state `StatefulFun<s, b>` that returns the new value `b` and the new state `s`.
  *
  * In:  A function `f` that takes a value of type `a` and returns a value of type `b`.
  * Out: A function:
- *      In:  A state of type `StateOperation<s, a>`.
- *      Out: A state of type `StateOperation<s, b>`.
+ *      In:  A state of type `StatefulFun<s, a>`.
+ *      Out: A state of type `StatefulFun<s, b>`.
  */
-const mapStateOperation = <s, a, b>(
+export const mapStatefulFun = <s, a, b>(
   f: Fun<a, b>
-): Fun<StateOperation<s, a>, StateOperation<s, b>> =>
-  Fun((s) => s.then(mapStateData(f, id())));
+): Fun<StatefulFun<s, a>, StatefulFun<s, b>> =>
+  Fun((s) => s.then(mapStateData(id(), f)));
 
 /**
- * Creates a state `StateOperation<s, a>` that returns a tuple of a value `a` and a state `s`.
+ * Creates a state `StatefulFun<s, a>` that returns a tuple of a value `a` and a state `s`.
  * The value `a` is the value given, and the state `s` is the updated state.
  *
  * In:  A value of type `a`.
- * Out: A state of type `StateOperation<s, a>`.
+ * Out: A state of type `StatefulFun<s, a>`.
  */
-const unitStateOperation = <s, a>(): Fun<a, StateOperation<s, a>> =>
-  Fun((a) => StateOperation((s) => StateData(a, s)));
+export const unitStatefulFun = <s, a>(): Fun<a, StatefulFun<s, a>> =>
+  Fun((a) => StatefulFun((s) => StateData(s, a)));
 
 /**
  * Applies a function `Fun<a, b>` to a value `a` and returns the result `b`.
  *
- * Used in `joinStateOperation`.
+ * Used in `joinStatefulFun`.
  *
  * In:  A pair of `Fun<a, b>` and a value `a`.
  * Out: A value `b`.
  */
-const apply = <a, b>(): Fun<Pair<Fun<a, b>, a>, b> =>
+export const apply = <a, b>(): Fun<Pair<Fun<a, b>, a>, b> =>
   Fun((fa) => fa.left(fa.right));
 
 // The same as `apply` but for `StateData`.
-const applyStateData = <s, a>(): Fun<StateData<Fun<s, a>, s>, a> =>
+export const applyStateData = <s, a>(): Fun<StateData<s, Fun<s, a>>, a> =>
   Fun((sd) => sd.value(sd.state));
 
 /**
- * Joins a state `StateOperation<s, StateOperation<s, a>>` into a state `StateOperation<s, a>`.
- * The first state `StateOperation<s, StateOperation<s, a>>` returns a tuple of a value `StateOperation<s, a>`
- * and a state `s`. Then, we run the `StateOperation<s, a>` to get a tuple of a value `a` and a state `s`.
- * Finally, we return a new state `StateOperation<s, a>` that returns the value `a` and the state `s`.
+ * Joins a state `StatefulFun<s, StatefulFun<s, a>>` into a state `StatefulFun<s, a>`.
+ * The first state `StatefulFun<s, StatefulFun<s, a>>` returns a tuple of a value `StatefulFun<s, a>`
+ * and a state `s`. Then, we run the `StatefulFun<s, a>` to get a tuple of a value `a` and a state `s`.
+ * Finally, we return a new state `StatefulFun<s, a>` that returns the value `a` and the state `s`.
  *
- * In:  A state of type `StateOperation<s, StateOperation<s, a>>`.
- * Out: A state of type `StateOperation<s, a>`.
+ * In:  A state of type `StatefulFun<s, StatefulFun<s, a>>`.
+ * Out: A state of type `StatefulFun<s, a>`.
  */
-const joinStateOperation = <s, a>(): Fun<
-  StateOperation<s, StateOperation<s, a>>,
-  StateOperation<s, a>
+export const joinStatefulFun = <s, a>(): Fun<
+  StatefulFun<s, StatefulFun<s, a>>,
+  StatefulFun<s, a>
 > => Fun((ns) => ns.then(applyStateData()));
 
 /**
@@ -1091,14 +1136,14 @@ const joinStateOperation = <s, a>(): Fun<
  *
  * The function itself works like this:
  * 1. The state `s` is given as input.
- * 2. Since any `StateOperation` returns data containing the new state and some value,
+ * 2. Since any `StatefulFun` returns data containing the new state and some value,
  *    we simply return the state `s` as the value and the state (i.e., `StateData<s, s>(s, s)`).
  *
  * In:  A state of type `s`.
- * Out: A state of type `StateOperation<s, s>`.
+ * Out: A state of type `StatefulFun<s, s>`.
  */
-const getState = <s>(): StateOperation<s, s> =>
-  StateOperation((s) => StateData(s, s));
+export const getState = <s>(): StatefulFun<s, s> =>
+  StatefulFun((s) => StateData(s, s));
 
 /**
  * A state operation (function that takes the state as input and returns a new state and a value)
@@ -1117,14 +1162,30 @@ const getState = <s>(): StateOperation<s, s> =>
  * In:  A state of type `s`.
  * Out: A function:
  *      In:  Unit (no value).
- *      Out: A `StateOperation<s, Unit>` function that ignores the incoming state and returns
+ *      Out: A `StatefulFun<s, Unit>` function that ignores the incoming state and returns
  *           a new `StateData` with the `state` set to the new state given when the function
  *           was made, along with a `Unit` value (since this operation has no real "result").
  */
-const setState = <s>(newState: s): StateOperation<s, Unit> =>
-  StateOperation((currentState) => StateData({}, newState));
+export const setState = <s>(newState: s): StatefulFun<s, Unit> =>
+  StatefulFun((currentState) => StateData(newState, {}));
 
 // RenderingBuffer example
 
-type RenderingBuffer = string;
-type Renderer = StateOperation<RenderingBuffer, Unit>;
+export type RenderingBuffer = string;
+export type Renderer = StatefulFun<RenderingBuffer, Unit>;
+export const Renderer = StatefulFun<RenderingBuffer, Unit>;
+
+export const renderNothing = Renderer((buffer) => StateData(buffer, {}));
+export const renderString = (s: string) =>
+  Renderer((buffer) => StateData(buffer + s, {}));
+export const renderAsterisk = renderString("*");
+export const renderSpace = renderString(" ");
+export const renderNewline = renderString("\n");
+
+export const rN: Fun<
+  RenderingBuffer,
+  StateData<RenderingBuffer, Unit>
+> = renderNothing;
+
+// const renderLine = (n: number): Fun<RenderingBuffer, StateData<RenderingBuffer, Unit>> =>
+//   n <= 0 ? renderNothing : renderAsterisk.then(getState().then());
