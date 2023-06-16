@@ -1,6 +1,6 @@
 // Types similar to Rust's for use in TypeScript
 
-import { Fun } from "./";
+import { Fun } from "./main";
 
 export type Unit = {};
 
