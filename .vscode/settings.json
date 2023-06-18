@@ -13,5 +13,6 @@
     "sweng",
     "Sweng2",
     "tslog"
-  ]
+  ],
+  "typescript.tsdk": "./typescript/node_modules/typescript/lib"
 }

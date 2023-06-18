@@ -1,4 +1,5 @@
 import { mainLogger } from "./logger";
+import { Process } from "./process";
 import {
   Err,
   Ok,
@@ -18,6 +19,10 @@ export type Fun<input, output> = {
   (output extends StateData<input, infer valueType>
     ? StatefulFunFields<input, valueType>
     : Unit);
+// &
+// (output extends Either<infer e, StateData<input, infer valueType>>
+//   ? ProcessFunFields<input, e, valueType>
+//   : Unit)
 
 export type SymmetricallyTypedFunFields<a> = {
   repeat: (times: number) => Fun<a, a>;
@@ -27,6 +32,10 @@ export type SymmetricallyTypedFunFields<a> = {
 export type StatefulFunFields<s, a> = {
   thenBind: <b>(f: (_: a) => StatefulFun<s, b>) => StatefulFun<s, b>;
 };
+
+// export type ProcessFunFields<s, e, a> = {
+//   thenBind: <b>(f: (_: a) => Process<s, e, b>) => Process<s, e, b>;
+// };
 
 export const Fun = function <a, b>(f: (_: a) => b): Fun<a, b> {
   const fn = f as Fun<a, b>;
@@ -919,7 +928,7 @@ export const mapEither = <a1, b1, a2, b2>(
         g.then(inr<a2, b2>())(e.value)
   );
 
-export const unitEither = <a, b>(): Fun<a, Either<a, b>> => inl<a, b>();
+export const unitEither = <a, b>(): Fun<b, Either<a, b>> => inr<a, b>();
 export const joinEither = <a, b>(): Fun<
   Either<a, Either<a, b>>,
   Either<a, b>
@@ -1046,17 +1055,7 @@ export type StatefulFun<s, a> = Fun<s, StateData<s, a>>;
 
 export const StatefulFun = <s, a>(
   f: (_: s) => StateData<s, a>
-): StatefulFun<s, a> => {
-  const fun = Fun(f) as StatefulFun<s, a>;
-  // fun.thenBind = function <b>(
-  //   this: StatefulFun<s, a>,
-  //   f: Fun<a, StatefulFun<s, b>>
-  // ) {
-  //   return bindStatefulFun(f)(this);
-  // };
-
-  return fun;
-};
+): StatefulFun<s, a> => Fun(f);
 
 export const bindStatefulFun = <s, a, b>(f: Fun<a, StatefulFun<s, b>>) =>
   mapStatefulFun<s, a, StatefulFun<s, b>>(f).then(joinStatefulFun<s, b>());

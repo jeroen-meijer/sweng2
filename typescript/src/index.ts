@@ -1,3 +1,3 @@
-import { dslTest } from "./dsl";
+import { testProcess } from "./process";
 
-dslTest();
+testProcess();

@@ -9,7 +9,7 @@ import {
   isPositive,
   safeSqrt,
   sqrt,
-} from "../src/index";
+} from "../src/main";
 import { Err, Ok } from "../src/utilityTypes";
 
 describe("operations", () => {

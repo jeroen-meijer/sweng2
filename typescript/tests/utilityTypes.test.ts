@@ -9,7 +9,7 @@ import {
   isPositive,
   safeSqrt,
   sqrt,
-} from "../src/index";
+} from "../src/main";
 import { mainLogger } from "../src/logger";
 import { Err, Ok, Unit } from "../src/utilityTypes";
 
